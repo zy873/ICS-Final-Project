@@ -13,7 +13,8 @@ import json
 import pickle as pkl
 from chat_utils import *
 import chat_group as grp
-\from Minesweeper import *
+
+from Minesweeper import *
 
 class Server:
 	def __init__(self):
@@ -22,19 +23,24 @@ class Server:
 		self.logged_sock2name = {} # dict mapping socket to user name
 		self.all_sockets = []
 		self.group = grp.Group()
+		self.group_key = 0
+		
 		#start server
 		self.server=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.server.bind(SERVER)
 		self.server.listen(5)
 		self.all_sockets.append(self.server)
+		
 		#initialize past chat indices
 		self.indices={}
+		
 		# sonnet
 		self.sonnet_f = open('AllSonnets.txt.idx', 'rb')
 		self.sonnet = pkl.load(self.sonnet_f)
 		self.sonnet_f.close()
-		# minesweeper game
-		\self.minesweeper_group = MinesweeperGroup()
+		
+		# pass to the minesweeper game
+		self.minesweeper_group = MinesweeperGroup()
 
 	def new_client(self, sock):
 		#add to all sockets and to new clients
@@ -174,9 +180,133 @@ class Server:
 					to_sock = self.logged_name2sock[g]
 					mysend(to_sock, json.dumps({"action":"disconnect"}))
 #==============================================================================
+#                log in the Minesweeper game pool
+#==============================================================================	
+			elif msg['action'] == 'login_game':
+				from_name = self.logged_sock2name[from_sock]
+				
+				# determine whether the user is already in the game pool
+				if self.minesweeper_group.is_member(from_name):
+					mysend(from_sock, json.dumps({"server_msg":'In pool'}))
+				else:
+					self.minesweeper_group.join(from_name)
+					print(from_name + " joins the game pool.")
+#					print(self.minesweeper_group.list_all())
+#==============================================================================
+#                quit the Minesweeper game pool
+#==============================================================================						
+			elif msg['action'] == 'quit game':
+				from_name = self.logged_sock2name[from_sock]
+				try:
+					self.minesweeper_group.leave(from_name)
+					print(from_name + 'leaves the game pool.')
+					player = self.minesweeper_group.list_me(from_name)[1]
+					to_sock = self.logged_name2sock[player]
+					\mysend(to_sock, json.dumps({"action": "quit game"})) not necessary to dump
+				except:
+					print('bug, server quit game')
+					pass
+#==============================================================================
+#                quit the current game
+#==============================================================================	
+			elif msg['action'] == 'quit playing':
+				from_name = self.logged_sock2name[from_sock]
+				try:
+					self.minesweeper_group.disconnect(from_name)
+					print(from_name + 'leaves the current game.')
+					
+					player = self.minesweeper_group.list_me(from_name)[1]
+					to_sock = self.logged_name2sock[player]
+					\mysend(to_sock, json.dumps({"action": "quit playing"})) 
+				except:
+					print('bug, server quit playing')
+					pass
+#==============================================================================
+#                connect two players
+#==============================================================================				
+			elif msg['action'] == "request":
+				from_name = self.logged_sock2name[from_sock]
+				to_name = msg["target"]
+				
+				try:
+					self.group_key = self.minesweeper_group.connect(from_name, to_name)
+					print(from_name + ' ' + to_name + " are connected.")
+				except:
+					print('bug, server request')
+					pass
+#==============================================================================
+#                in the minesweeper game
+#==============================================================================						
+			elif msg['action'] == 'game move': #pre: client has entered the instructions for game move
+				# pass in Minesweeper class
+				short = self.minesweeper_group.grp_object[self.group_key]
+				
+				# initialize game, find the first player
+				starter = short.set_up_play()
+				
+				while not short.win:
+					from_name = self.logged_sock2name[from_sock]
+					other = self.minesweeper_group.list_me(from_name)[1]
+					to_sock = self.logged_name2sock[other]
+					
+					# tell clients the starter
+					mysend(from_sock, json.dumps({'starter': starter})
+					mysend(to_sock, json.dumps({'starter': starter})
+					
+					# determine whether client's message are valid for the game
+					instr = msg["message"]
+					instr = instr.split(' ')
+					oper = instr[0]
+					pos = instr [1]
+					
+					flag = False
+					while not flag:
+						if from_name == starter:
+							if (pos[0] in self.letters) and pos[1:] <='9' and pos[1:] >= '1' and (pos not in self.change_frame):
+								flag = True
+						else:
+							mysend(from_sock, json.dumps({'server_msg': "Wrong player to make the move!")
+							from_name = self.logged_sock2name[from_sock]
+							other = self.minesweeper_group.list_me(from_name)[1]
+					# if valid, make the move
+					short.move(from_name,msg["message"])	
+					
+#			\\\laji		try:
+#	
+#				
+#					flag = True
+#					enter = ''					
+#					while flag == True:
+#						enter = input('Choose the player you want to play with in this format: @@ __name__(game with __name__)\n Or enter quit to leave the game pool')	
+#						if enter == 'quit':
+#							self.minesweeper_group.leave(from_name)
+#							game.quit() #clear all the list and dic
+#							mysend(to_sock, json.dumps({"action":"disconnect_from_game"}))
+#							flag = False
+#						elif enter[:2] == '@@':
+#							game_rival = enter[2:]
+#							if self.minesweeper_group.is_member(game_rival):
+#								in_grp, grp_num = self.minesweeper_group.find_group(game_rival)
+#								if not in_grp:
+#									quit = False
+#									self.minesweeper_group.connect(me, game_rival)
+#									while not quit:
+#										....set_up_play()
+#										....menu()
+#										msg = input('Enter: ')
+#										
+#									......move
+#								else:
+#									print('Unexpected! Your rival has abandoned you. Choose another rival.')	
+#							
+#							else:
+#								print(game_rival + ' is not in the game pool yet.')
+#				mysend(from_sock, msg)
+
+
+#==============================================================================
 #                 the "from" guy really, really has had enough
 #==============================================================================
-
 		else:
 			#client died unexpectedly
 			self.logout(from_sock)
