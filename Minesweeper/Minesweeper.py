@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import random
 random.seed(0)
 
@@ -202,9 +203,13 @@ class Minesweeper:
 		# Initialize the game: generate new board and mine map
 		self.initialize_state()
 		print(self.board(self.show_frame))
-
+		# game_mode = input('Do you want to self-design mine number? Enter y/n: ')
+		# if game_mode == 'y':
+		# 	mines_num = int(input('Enter the number of mines you want in this game: '))
+		# 	self.set_mines_num(mines_num)
 		self.generate_mines()
 		self.menu()
+		
 		
 		choice = random.randint(1,2)
 		if choice == 1:
