@@ -41,7 +41,10 @@ class Server:
 		
 		# pass to the minesweeper game
 		self.minesweeper_group = MinesweeperGroup()
-
+		self.short = '' # will be a class in Minesweeper
+		self.starter = '' # game starter
+		self.board = '' # game board
+		
 	def new_client(self, sock):
 		#add to all sockets and to new clients
 		print('new client...')
@@ -190,8 +193,9 @@ class Server:
 					mysend(from_sock, json.dumps({"server_msg":'In pool'}))
 				else:
 					self.minesweeper_group.join(from_name)
+					mysend(from_sock, json.dumps({"server_msg":'success'}))
 					print(from_name + " joins the game pool.")
-#					print(self.minesweeper_group.list_all())
+					print(self.minesweeper_group.list_all())
 #==============================================================================
 #                quit the Minesweeper game pool
 #==============================================================================						
@@ -202,7 +206,7 @@ class Server:
 					print(from_name + 'leaves the game pool.')
 					player = self.minesweeper_group.list_me(from_name)[1]
 					to_sock = self.logged_name2sock[player]
-					\mysend(to_sock, json.dumps({"action": "quit game"})) not necessary to dump
+					mysend(to_sock, json.dumps({"server_msg": "quit game"}))
 				except:
 					print('bug, server quit game')
 					pass
@@ -211,98 +215,87 @@ class Server:
 #==============================================================================	
 			elif msg['action'] == 'quit playing':
 				from_name = self.logged_sock2name[from_sock]
-				try:
-					self.minesweeper_group.disconnect(from_name)
-					print(from_name + 'leaves the current game.')
-					
-					player = self.minesweeper_group.list_me(from_name)[1]
-					to_sock = self.logged_name2sock[player]
-					\mysend(to_sock, json.dumps({"action": "quit playing"})) 
-				except:
-					print('bug, server quit playing')
-					pass
+				print(self.minesweeper_group.game_grps)
+				player = self.minesweeper_group.list_me(from_name)[1]
+				print(self.logged_name2sock[player])
+				to_sock = self.logged_name2sock[player]
+				print(to_sock)
+				mysend(to_sock, json.dumps({"server_msg": "quit playing"}))
+				print(player)
+				print(from_name + 'leaves the current game.')
+				self.minesweeper_group.disconnect(from_name)
+				
 #==============================================================================
-#                connect two players
+#                connect two players, set up game
 #==============================================================================				
 			elif msg['action'] == "request":
 				from_name = self.logged_sock2name[from_sock]
 				to_name = msg["target"]
+				if self.minesweeper_group.is_member(to_name):
+					in_grp, grp_num = self.minesweeper_group.find_group(to_name)
+					if in_grp == False:
+						mysend(from_sock, json.dumps({'server_msg':'you can connect'}))
+						self.group_key = self.minesweeper_group.connect(from_name, to_name)
+						print(self.minesweeper_group.game_grps)
+						print(from_name + ' ' + to_name + " are connected.")
+					else:
+						mysend(from_sock, json.dumps({'server_msg':'in a game'}))
+				else:
+					mysend(from_sock, json.dumps({'server_msg':'not in pool','game_group':self.minesweeper_group.list_all()}))
+			
+			elif msg['action'] == 'request successful':
+				from_name = self.logged_sock2name[from_sock]
+				to_name = msg["target"]
+				to_sock = self.logged_name2sock[to_name]
 				
-				try:
-					self.group_key = self.minesweeper_group.connect(from_name, to_name)
-					print(from_name + ' ' + to_name + " are connected.")
-				except:
-					print('bug, server request')
-					pass
+				# initialize the game: pass in Minesweeper class, find the starter, find the inital board
+				self.short = self.minesweeper_group.grp_object[self.group_key]
+				self.starter = self.short.set_up_play()
+				self.board = self.short.board(self.short.show_frame)
+				mysend(from_sock, json.dumps({'starter': self.starter,'board':self.board}))
+				mysend(to_sock, json.dumps({'action':'request successful','from':from_name,'starter': self.starter,'board':self.board}))
+
 #==============================================================================
 #                in the minesweeper game
 #==============================================================================						
 			elif msg['action'] == 'game move': #pre: client has entered the instructions for game move
-				# pass in Minesweeper class
-				short = self.minesweeper_group.grp_object[self.group_key]
+				from_name = self.logged_sock2name[from_sock]
+				other = self.minesweeper_group.list_me(from_name)[1]
+				to_sock = self.logged_name2sock[other]
 				
-				# initialize game, find the first player
-				starter = short.set_up_play()
+				print(self.short.win)
 				
-				while not short.win:
-					from_name = self.logged_sock2name[from_sock]
-					other = self.minesweeper_group.list_me(from_name)[1]
-					to_sock = self.logged_name2sock[other]
-					
-					# tell clients the starter
-					mysend(from_sock, json.dumps({'starter': starter})
-					mysend(to_sock, json.dumps({'starter': starter})
-					
+				if not self.short.win:
 					# determine whether client's message are valid for the game
 					instr = msg["message"]
 					instr = instr.split(' ')
 					oper = instr[0]
 					pos = instr [1]
 					
-					flag = False
-					while not flag:
-						if from_name == starter:
-							if (pos[0] in self.letters) and pos[1:] <='9' and pos[1:] >= '1' and (pos not in self.change_frame):
-								flag = True
-						else:
-							mysend(from_sock, json.dumps({'server_msg': "Wrong player to make the move!")
-							from_name = self.logged_sock2name[from_sock]
-							other = self.minesweeper_group.list_me(from_name)[1]
-					# if valid, make the move
-					short.move(from_name,msg["message"])	
-					
-#			\\\laji		try:
-#	
-#				
-#					flag = True
-#					enter = ''					
-#					while flag == True:
-#						enter = input('Choose the player you want to play with in this format: @@ __name__(game with __name__)\n Or enter quit to leave the game pool')	
-#						if enter == 'quit':
-#							self.minesweeper_group.leave(from_name)
-#							game.quit() #clear all the list and dic
-#							mysend(to_sock, json.dumps({"action":"disconnect_from_game"}))
-#							flag = False
-#						elif enter[:2] == '@@':
-#							game_rival = enter[2:]
-#							if self.minesweeper_group.is_member(game_rival):
-#								in_grp, grp_num = self.minesweeper_group.find_group(game_rival)
-#								if not in_grp:
-#									quit = False
-#									self.minesweeper_group.connect(me, game_rival)
-#									while not quit:
-#										....set_up_play()
-#										....menu()
-#										msg = input('Enter: ')
-#										
-#									......move
-#								else:
-#									print('Unexpected! Your rival has abandoned you. Choose another rival.')	
-#							
-#							else:
-#								print(game_rival + ' is not in the game pool yet.')
-#				mysend(from_sock, msg)
 
+					if from_name == self.starter:
+						if (pos[0] in self.short.letters) and pos[1:] <='9' and pos[1:] >= '1' and (pos not in self.short.change_frame):
+							
+							# if valid, make the move
+							self.starter, self.board, end_msg = self.short.move(from_name, msg["message"])
+							
+							mysend(from_sock, json.dumps({'server_msg':'successfully moved', 'starter': self.starter,'board':self.board, 'end_msg':end_msg}))
+							mysend(to_sock, json.dumps({'server_msg':'successfully moved','starter': self.starter,'board':self.board, 'end_msg':end_msg}))	
+						else:
+							mysend(from_sock, json.dumps({'server_msg': "Invalid move"}))
+					else:
+						mysend(from_sock, json.dumps({'server_msg': "Wrong player"}))
+				
+#				# if the game ends, let player go in the pool
+#				else:
+#					self.minesweeper_group.disconnect(from_name)
+#					self.minesweeper_group.disconnect(other)
+#					to_sock = self.logged_name2sock[other]
+#					mysend(to_sock, json.dumps({"server_msg": "game over"}))
+#					mysend(from_sock, json.dumps({"server_msg": "game over"}))  
+					
+				else:
+					print('ERROR')
 
 #==============================================================================
 #                 the "from" guy really, really has had enough

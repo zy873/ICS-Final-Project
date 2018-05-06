@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import random
 random.seed(0)
 
@@ -148,7 +149,7 @@ class Minesweeper:
 				output += str(pos_state[pos]) + ' '
 			output += "|" + str(j) + '\n'
 		output += underline + width 
-		print(output)
+		return output
 
 	def generate_mines(self):
 		# generate mines
@@ -201,27 +202,28 @@ class Minesweeper:
 		## display the changing game board to the users
 		# Initialize the game: generate new board and mine map
 		self.initialize_state()
-		self.board(self.show_frame)
-		game_mode = input('Do you want to self-design mine number? Enter y/n: ')
-		if game_mode == 'y':
-			mines_num = int(input('Enter the number of mines you want in this game: '))
-			self.set_mines_num(mines_num)
+		print(self.board(self.show_frame))
+		# game_mode = input('Do you want to self-design mine number? Enter y/n: ')
+		# if game_mode == 'y':
+		# 	mines_num = int(input('Enter the number of mines you want in this game: '))
+		# 	self.set_mines_num(mines_num)
 		self.generate_mines()
 		self.menu()
 		
 		
 		choice = random.randint(1,2)
 		if choice == 1:
-			initial_user = self.player1
+			self.initial_user = self.player1
 		else:
-			initial_user = self.player2
-		starter = initial_user + ' can move now!'
-		return starter
+			self.initial_user = self.player2
+		starter = self.initial_user + ' can move now.'
+		return self.initial_user
 	
 	def move(self, player_name, msg): #msg will be in the form in the menu, no duplicate operation on the same pos
 		msg = msg.split(' ')
 		oper = msg[0]
 		pos = msg [1]
+		end_msg = ''
 		
 		# determine which player dictionary to refresh
 		if player_name == self.player1:
@@ -229,34 +231,34 @@ class Minesweeper:
 		else:
 			self.player2_move[pos] = oper
 		
+		#reset valid next player
+		z = [self.player1, self.player2]
+		z.remove(self.initial_user)
+		self.initial_user = z[0]
+		
 		#refresh the board according to the player's move	
 		if oper == 'f':
 			self.show_frame[pos] = self.state[S_FLAG]
-			self.board(self.show_frame)
+			return self.initial_user, self.board(self.show_frame), end_msg
 		elif oper == 'o':
 			if self.bcground[pos] == self.state[S_MINES]:
-				self.board(self.bcground)
-				print('BOOM!!!!\n'+ player_name + ' steps on the mine!!!')
+				end_msg = 'BOOM!!!!\n'+ player_name + ' steps on the mine!!!'
 				self.win = True
-				return 
+				return self.initial_user, self.board(self.bcground), end_msg
 			else:
 				self.click_display(pos)
-				self.board(self.show_frame)
 				
+				#decide if win
 				self.count_show_frame_not_mine = 0
 				for ele in self.show_frame.values():
 					if str(ele).isdigit():
 						self.count_show_frame_not_mine += 1
 					if ele == self.state[S_BLANK]:
-						self.count_show_frame_not_mine += 1
+						self.count_show_frame_not_mine += 1	
 				if self.count_not_mine == self.count_show_frame_not_mine:
-					print('Congratulations! Both of you won!')
-					self.win = True
-					return 
-
-	 	z = [self.player1, self.player2]
-		z.remove(self.initial_user)
-		self.initial_user = z[0]
+					end_msg = 'Congratulations! Both of you won!'
+					self.win = True	
+				return self.initial_user, self.board(self.show_frame), end_msg
 	
 	def click_display(self, pos):
 		if pos in self.change_frame:
@@ -307,26 +309,26 @@ class Minesweeper:
 #		self.quit_playing(player1, player2)	
 			
 			
-test = Minesweeper('a', 'b')
-test.set_up_play()
-test.move('b','o A1')
-test.move('a','o A2')
-test.move('b','o A3')
-test.move('b','o A4')
-test.move('a','o B1')
-test.move('b','o B3')
-test.move('a','o B4')
-test.move('b','o B5')
-test.move('a','o C1')
-test.move('b','o C3')
-test.move('a','o C4')
-test.move('b','o G6')
-test.move('b','f E9')
-test.move('b','o H5')
-test.move('a','o H7')
-test.move('b','o I7')
-test.move('b','o E6')
-test.move('a','o G9')
-test.move('b','o I6')
-test.move('a','o I9')
+#test = Minesweeper('a', 'b')
+#test.set_up_play()
+#test.move('b','o A1')
+#test.move('a','o A2')
+#test.move('b','o A3')
+#test.move('b','o A4')
+#test.move('a','o B1')
+#test.move('b','o B3')
+#test.move('a','o B4')
+#test.move('b','o B5')
+#test.move('a','o C1')
+#test.move('b','o C3')
+#test.move('a','o C4')
+#test.move('b','o G6')
+#test.move('b','f E9')
+#test.move('b','o H5')
+#test.move('a','o H7')
+#test.move('b','o I7')
+#test.move('b','o E6') 
+#test.move('a','o G9')
+#test.move('b','o I6')
+#test.move('a','o I9')
 

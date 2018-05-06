@@ -14,7 +14,6 @@ class ClientSM:
         self.me = ''
         self.out_msg = ''
         self.s = s
-        self.m_group = MinesweeperGroup()
         
     def set_state(self, state):
         self.state = state
@@ -107,21 +106,18 @@ class ClientSM:
                 elif my_msg == 'ping blah blah':
                     self.out_msg += 'pong blah blah'
                
-               \ elif my_msg == "g":
+                elif my_msg == "g":
                     
-                    try:
-                        mysend(self.s,json.dumps({'action':'login_game'}))
-                        server_msg = json.loads(myrecv(self.s))["server_msg"]
-                        if server_msg == 'In pool':
-                            self.out_msg = 'You are already in the game pool.\n'
-                        else:
-                            self.state = S_GAME
-                            self.out_msg += "You have just joined the game pool. Play now!\n"
-                            self.out_msg += "Enter in the format of '@@ __partner__' to play the game with your partner"
-                            self.out_msg += '-----------------------------------\n\n'
+                    mysend(self.s,json.dumps({'action':'login_game'}))
+                    server_msg = json.loads(myrecv(self.s))["server_msg"]
+                    if server_msg == 'In pool':
+                        self.out_msg += 'You are already in the game pool.\n'
+                    else:
+                        self.state = S_GAME  
+                        self.out_msg += "You have just joined the game pool. Play now!\n"
+                        self.out_msg += "Enter in the format of '@@ __partner__' to play the game with your partner"
+                        self.out_msg += '-----------------------------------\n\n'
 
-                    except:
-                        pass
 
             if len(peer_msg) > 0:
                 peer_msg = json.loads(peer_msg)
@@ -132,7 +128,7 @@ class ClientSM:
                     self.out_msg += '. Chat away!\n\n'
                     self.out_msg += '------------------------------------\n'
                     self.state = S_CHATTING
-              \  if peer_msg['action'] == 'request':
+                if peer_msg['action'] == 'request':
                     self.peer = peer_msg["from"]
                     self.out_msg += 'Game Request from ' + self.peer + '\n'
                     self.out_msg += 'Please enter g to join the game pool first.'
@@ -160,52 +156,59 @@ class ClientSM:
 #==============================================================================
 # In the game pool, but not in a game
 #==============================================================================
-      \  elif self.state == S_GAME:
+        elif self.state == S_GAME:
             if len(peer_msg) > 0:    # peer's stuff, coming in
                 peer_msg = json.loads(peer_msg)
-                if peer_msg['action'] == 'request':
+                if peer_msg['action'] == 'request successful':
                     self.peer = peer_msg["from"]
                     self.out_msg += 'Request from ' + self.peer + '\n'
                     self.out_msg += 'You are now in the game with ' + self.peer + '. Sweep mines now!\n\n'
                     self.out_msg += '------------------------------------\n'
+                    
+                    # print the inital game board and starter
+                    self.out_msg += peer_msg['starter'] + '\n' + peer_msg['board'] + '\n'
                     self.state = S_PLAYING
                     
             
             if len(my_msg) > 0: # input g someone to connect with sb in game
                 if my_msg == 'quit game':
-           \\         msg = json.dumps({"action":"quit game"})
+                    msg = json.dumps({"action":"quit game"})
                     mysend(self.s, msg)
                     self.out_msg += 'You have logged out of the game pool.'
-                    self.state = S_LOGGEDIN
+                    self.state = S_LOGGEDIN # and then print chat menu??@@@@@@@@@@@@
                 else:
                     if my_msg[:2] == '@@':
                         peer = my_msg[2:]
                         peer = peer.strip()
+                        
+                        msg = json.dumps({"action":"request", "target":peer})
+                        mysend(self.s, msg)
 
                         #if your partner is in the pool and is not in a game
-                        if self.m_group.is_member(peer):
-                            in_grp, grp_num = self.m_group.find_group(peer)
-                                if in_grp == False:
-                                    msg = json.dumps({"action":"request", "target":peer})
-                                    mysend(self.s, msg)
-                                    self.state = S_PLAYING
-                                    self.out_msg += 'You are now in the game with ' + peer + '. Sweep mines now!\n\n'
-                                    self.out_msg += '-----------------------------------\n'
-                                else:
-                                    self.out_msg += 'Your partner is in a game now. Do you want to play the game with others?')
-                                    self.out_msg += self.m_group.list_all()
-                        else:
-                            self.out_msg += 'Your partner is not in the game pool yet!') #now can only quit game, enter chat system, connect with peer, and then ask him to join
-                            self.out_msg += self.m_group.list_all()
+                        server_msg = json.loads(myrecv(self.s))['server_msg']
+                        if server_msg == 'you can connect':
+                            self.state = S_PLAYING
+                            self.out_msg += 'You are now in the game with ' + peer + '. Sweep mines now!\n\n'
+                            self.out_msg += '-----------------------------------\n'
+                            mysend(self.s,json.dumps({'action':'request successful','target':peer}))
+                            
+                            # print the inital game board and starter
+                            server_msg = json.loads(myrecv(self.s))
+                            self.out_msg += server_msg['starter'] + '\n' + server_msg['board'] + '\n' 
+                            
+                        elif server_msg == 'in a game':
+                            self.out_msg += 'Your partner is in a game now. Do you want to play the game with others?'
+                        elif server_msg == 'not in pool':
+                            self.out_msg += 'Your partner is not in the game pool yet!\n' 
+                            #now can only quit game, enter chat system, connect with peer, and then ask him to join
+                            self.out_msg += json.loads(myrecv(self.s))['game_group']
                     else:
                         self.out_msg += "Please make sure that you have entered the right instruction.\nEnter in the format of '@@ __partner__' to play the game with your partner"
 
 #==============================================================================
 # In a game 
 #==============================================================================
-     \   elif self.state == S_PLAYING:
-            server_msg = json.loads(myrecv(self.s))["starter"]
-            print(server_msg)
+        elif self.state == S_PLAYING:
             
             if len(my_msg) > 0:
                 if my_msg == 'quit playing':
@@ -220,27 +223,51 @@ class ClientSM:
                     self.out_msg += 'You have logged out of the game pool.'
                     self.state = S_LOGGEDIN
                 else:
+                    # making the game move
                     if my_msg[0] == 'f' or my_msg[0] == 'o':
                         mysend(self.s, json.dumps({"action": "game move", "from":"[" + self.me + "]", "message":my_msg}))
-                        try:
-                            server_msg = json.loads(myrecv(self.s))["server_msg"]
-                            print(server_msg)
-                        except:
-                            pass
                         
+                        # receive the server's judgement:
+                        server_msg = json.loads(myrecv(self.s))
+                        if server_msg["server_msg"] == 'successfully moved':
+                            if server_msg['end_msg'] == '':
+                                self.out_msg += server_msg['starter'] + '\n' + server_msg['board'] + '\n' 
+                            else:
+                                self.out_msg += server_msg['board'] + '\n' + server_msg['end_msg'] + '\n'
+                                msg = json.dumps({"action":"quit playing"})
+                                mysend(self.s, msg)
+                                
+                        elif server_msg['server_msg'] == "Invalid move":
+                            self.out_msg += 'Please enter a valid move.\n'
+                        
+                        elif server_msg['server_msg'] == "Wrong player":
+                            self.out_msg += 'This is not your turn yet! Please wait for your partner to move.\n'
+                        elif server_msg['server_msg'] == 'game over':
+                            self.out_msg += server_msg['board'] + '\n' + server_msg['end_msg'] + '\n'
+                            msg = json.dumps({"action":"quit playing"})
+                            mysend(self.s, msg)
+                    # chatting
                     else:
-                        mysend(self.s, json.dumps({"action":"exchange", "from":"[" + self.me + "]", "message":my_msg}))
-    
+                        pass
+                        
             if len(peer_msg) > 0:
                 peer_msg = json.loads(peer_msg) 
-                if peer_msg["action"] == "quit playing" or peer_msg["action"] == "quit game":
+                if peer_msg['server_msg'] == "quit playing" or peer_msg['server_msg'] == "quit game":
                     msg = json.dumps({"action":"quit playing"})
                     mysend(self.s, msg)
                     self.out_msg += "You are forced to quit this game bc your partner has quited the game/game pool.\n"
                     self.m_group.leave(self.me)
                     self.state = S_GAME
-                elif peer_msg["action"] == "game move":
+                elif peer_msg['server_msg'] == 'game over':
+                    self.out_msg += peer_msg['board'] + '\n' + peer_msg['end_msg'] + '\n'
+                elif peer_msg['server_msg'] == 'successfully moved':
+                    self.out_msg += peer_msg['starter'] + '\n' + peer_msg['board'] + '\n'
                     self.out_msg += 'Your partner has made the move. Now it is your turn.'
+                else:
+                    self.out_msg += 'ERROR'
+ 
+                
+                    
               
 #==============================================================================
 # invalid state
