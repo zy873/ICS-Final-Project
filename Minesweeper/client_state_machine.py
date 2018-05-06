@@ -167,26 +167,25 @@ class ClientSM:
                     
                     # print the inital game board and starter
                     self.out_msg += peer_msg['starter'] + '\n' + peer_msg['board'] + '\n'
-                    self.state = S_PLAYING       
+                    self.state = S_PLAYING
+                    
             
             if len(my_msg) > 0: # input g someone to connect with sb in game
-                
                 if my_msg == 'quit game':
                     msg = json.dumps({"action":"quit game"})
                     mysend(self.s, msg)
                     self.out_msg += 'You have logged out of the game pool.'
                     self.state = S_LOGGEDIN # and then print chat menu??@@@@@@@@@@@@
                 else:
-                    self.out_msg += '0'
                     if my_msg[:2] == '@@':
                         peer = my_msg[2:]
                         peer = peer.strip()
+                        
                         msg = json.dumps({"action":"request", "target":peer})
                         mysend(self.s, msg)
-                       
+
                         #if your partner is in the pool and is not in a game
                         server_msg = json.loads(myrecv(self.s))['server_msg']
-                        self.out_msg += json.loads(myrecv(self.s))['server_msg']
                         if server_msg == 'you can connect':
                             self.state = S_PLAYING
                             self.out_msg += 'You are now in the game with ' + peer + '. Sweep mines now!\n\n'
@@ -240,15 +239,15 @@ class ClientSM:
                                 
                         elif server_msg['server_msg'] == "Invalid move":
                             self.out_msg += 'Please enter a valid move.\n'
+                            
                         
                         elif server_msg['server_msg'] == "Wrong player":
                             self.out_msg += 'This is not your turn yet! Please wait for your partner to move.\n'
                         elif server_msg['server_msg'] == 'game over':
                             self.out_msg += server_msg['board'] + '\n' + server_msg['end_msg'] + '\n'
                             msg = json.dumps({"action":"quit playing"})
-                            mysend(self.s, msg)
                             self.state = S_GAME
-                            
+                            mysend(self.s, msg)
                     # chatting
                     else:
                         pass
@@ -256,7 +255,7 @@ class ClientSM:
             if len(peer_msg) > 0:
                 peer_msg = json.loads(peer_msg) 
                 if peer_msg['server_msg'] == "quit playing" or peer_msg['server_msg'] == "quit game":
-                    self.out_msg += "You are forced to quit this game bc your partner has quited the game/game pool.\n"
+                    self.out_msg += "You are forced to quit this game bc your partner has quited the game/game pool.\n"                    
                     self.state = S_GAME
                 elif peer_msg['server_msg'] == 'game over':
                     self.out_msg += peer_msg['board'] + '\n' + peer_msg['end_msg'] + '\n'
