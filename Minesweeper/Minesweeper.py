@@ -120,7 +120,7 @@ class Minesweeper:
 		
 	def menu(self):
 		menu = 'f __pos__: flag the __pos__ as the mine\no __pos__: open the __pos__ that you think is safe\nexample: f A7\n\n'
-		print(menu)
+		return menu
 	
 	def initialize_state(self):
 		for j in range(1,self.size + 1):
@@ -208,7 +208,6 @@ class Minesweeper:
 		# 	mines_num = int(input('Enter the number of mines you want in this game: '))
 		# 	self.set_mines_num(mines_num)
 		self.generate_mines()
-		self.menu()
 		
 		
 		choice = random.randint(1,2)
@@ -256,7 +255,7 @@ class Minesweeper:
 					if ele == self.state[S_BLANK]:
 						self.count_show_frame_not_mine += 1	
 				if self.count_not_mine == self.count_show_frame_not_mine:
-					end_msg = 'Congratulations! Both of you won!'
+					end_msg = 'Congratulations! Both of you won :D'
 					self.win = True	
 				return self.initial_user, self.board(self.show_frame), end_msg
 	
