@@ -44,6 +44,8 @@ class Server:
 		self.short = '' # will be a class in Minesweeper
 		self.starter = '' # game starter
 		self.board = '' # game board
+		self.rules = ''
+		self.end_msg = ''
 		
 	def new_client(self, sock):
 		#add to all sockets and to new clients
@@ -197,19 +199,16 @@ class Server:
 					print(from_name + " joins the game pool.")
 					print(self.minesweeper_group.list_all())
 #==============================================================================
-#                quit the Minesweeper game pool
+#                quit the Minesweeper game pool \\\\\\\\ last change
 #==============================================================================						
 			elif msg['action'] == 'quit game':
 				from_name = self.logged_sock2name[from_sock]
-				try:
-					self.minesweeper_group.leave(from_name)
-					print(from_name + 'leaves the game pool.')
-					player = self.minesweeper_group.list_me(from_name)[1]
-					to_sock = self.logged_name2sock[player]
-					mysend(to_sock, json.dumps({"server_msg": "quit game"}))
-				except:
-					print('bug, server quit game')
-					pass
+				player = self.minesweeper_group.list_me(from_name)[1]
+				to_sock = self.logged_name2sock[player]
+				mysend(to_sock, json.dumps({"server_msg": "quit game"}))
+				self.minesweeper_group.leave(from_name)
+				print(from_name + ' leaves the game pool.')
+
 #==============================================================================
 #                quit the current game
 #==============================================================================	
@@ -228,9 +227,15 @@ class Server:
 				print(self.minesweeper_group.list_all())
 				player = self.minesweeper_group.list_me(from_name)[1]
 				to_sock = self.logged_name2sock[player]
-				mysend(to_sock, json.dumps({"server_msg": "quit playing"}))
+				
+				# if end game due to sb wins, return the end msg
+				try:
+					mysend(to_sock, json.dumps({"server_msg": msg['reason'],'starter': self.starter,'board':self.board, 'end_msg':self.end_msg}))
+				# if sb forcefully end the game, return this result
+				except:
+					mysend(to_sock, json.dumps({"server_msg": "quit playing"}))
 				self.minesweeper_group.disconnect(from_name)
-				print(from_name + 'leaves the current game.')
+				print(from_name + ' leaves the current game.')
 				
 #==============================================================================
 #                connect two players, set up game
@@ -238,17 +243,20 @@ class Server:
 			elif msg['action'] == "request":
 				from_name = self.logged_sock2name[from_sock]
 				to_name = msg["target"]
-				if self.minesweeper_group.is_member(to_name):
-					in_grp, grp_num = self.minesweeper_group.find_group(to_name)
-					if in_grp == False:
-						mysend(from_sock, json.dumps({'server_msg':'you can connect'}))
-						self.group_key = self.minesweeper_group.connect(from_name, to_name)
-						print(self.minesweeper_group.game_grps)
-						print(from_name + ' ' + to_name + " are connected.")
-					else:
-						mysend(from_sock, json.dumps({'server_msg':'in a game'}))
+				if from_name == to_name:
+					mysend(from_sock, json.dumps({'server_msg':'connect to self'}))
 				else:
-					mysend(from_sock, json.dumps({'server_msg':'not in pool','game_group':self.minesweeper_group.list_all()}))
+					if self.minesweeper_group.is_member(to_name):
+						in_grp, grp_num = self.minesweeper_group.find_group(to_name)
+						if in_grp == False:
+							mysend(from_sock, json.dumps({'server_msg':'you can connect'}))
+							self.group_key = self.minesweeper_group.connect(from_name, to_name)
+							print(self.minesweeper_group.game_grps)
+							print(from_name + ' ' + to_name + " are connected.")
+						else:
+							mysend(from_sock, json.dumps({'server_msg':'in a game'}))
+					else:
+						mysend(from_sock, json.dumps({'server_msg':'not in pool','game_group':self.minesweeper_group.list_all()}))
 			
 			elif msg['action'] == 'request successful':
 				from_name = self.logged_sock2name[from_sock]
@@ -259,8 +267,9 @@ class Server:
 				self.short = self.minesweeper_group.grp_object[self.group_key]
 				self.starter = self.short.set_up_play()
 				self.board = self.short.board(self.short.show_frame)
-				mysend(from_sock, json.dumps({'starter': self.starter,'board':self.board}))
-				mysend(to_sock, json.dumps({'action':'request successful','from':from_name,'starter': self.starter,'board':self.board}))
+				self.rules = self.short.menu()
+				mysend(from_sock, json.dumps({'starter': self.starter,'board':self.board, 'rules': self.rules}))
+				mysend(to_sock, json.dumps({'action':'request successful','from':from_name,'starter': self.starter,'board':self.board, 'rules': self.rules}))
 
 #==============================================================================
 #                in the minesweeper game
@@ -284,10 +293,10 @@ class Server:
 						if (pos[0] in self.short.letters) and pos[1:] <='9' and pos[1:] >= '1' and (pos not in self.short.change_frame):
 							
 							# if valid, make the move
-							self.starter, self.board, end_msg = self.short.move(from_name, msg["message"])
+							self.starter, self.board, self.end_msg = self.short.move(from_name, msg["message"])
 							
-							mysend(from_sock, json.dumps({'server_msg':'successfully moved', 'starter': self.starter,'board':self.board, 'end_msg':end_msg}))
-							mysend(to_sock, json.dumps({'server_msg':'successfully moved','starter': self.starter,'board':self.board, 'end_msg':end_msg}))	
+							mysend(from_sock, json.dumps({'server_msg':'successfully moved', 'starter': self.starter,'board':self.board, 'end_msg':self.end_msg}))
+							mysend(to_sock, json.dumps({'server_msg':'successfully moved','starter': self.starter,'board':self.board, 'end_msg':self.end_msg}))	
 						else:
 							mysend(from_sock, json.dumps({'server_msg': "Invalid move"}))
 					else:
