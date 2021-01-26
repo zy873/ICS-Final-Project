@@ -10,18 +10,6 @@ S_BLANK = '3'
 S_ALONE = 0
 S_PLAYING = 1
 
-#class MinesweeperGroup:
-#	def __init__(self):
-#		self.games = {}
-#		self.game_member = {}
-#		self.games_ever = 0
-#	
-#	def join(self, player1, player2):
-#		self.games[self.games_ever + 1] = Minesweeper(player1, player2)
-#		self.game_member[self.games_ever + 1] =([player1, player2])
-#		self.games_ever += 1
-#	
-
 class MinesweeperGroup:
 	def __init__(self):
 		self.members = {}
@@ -52,7 +40,7 @@ class MinesweeperGroup:
 		return found, group_key
 
 	def connect(self, me, peer):
-		# connect assuming that peer in game pool & not already playing
+		# connect assuming that peer in game pool & not in a game
 		self.game_ever += 1
 		group_key = self.game_ever
 		self.game_grps[group_key] = []
@@ -78,7 +66,6 @@ class MinesweeperGroup:
 		return
 
 	def list_all(self):
-		# a simple minded implementation
 		full_list = "Users: ------------" + "\n"
 		full_list += str(self.members) + "\n"
 		full_list += "Groups: -----------" + "\n"
@@ -172,7 +159,8 @@ class Minesweeper:
 				for i in letter:
 					for j in range(int(mine[1])-1, int(mine[1])+2):
 						change_number_pos = i + str(j)
-						#print(change_number_pos,mine)
+
+						# if not mine & not on the extended board, add one
 						if change_number_pos != mine and change_number_pos[0] != 'X' and change_number_pos[0] != 'Y' and change_number_pos[1] != '0' and change_number_pos[1:] != '10':
 							if change_number_pos in numbers.keys():
 								numbers[change_number_pos] += 1
@@ -200,13 +188,9 @@ class Minesweeper:
 			
 	def set_up_play(self):
 		## display the changing game board to the users
-		# Initialize the game: generate new board and mine map
+		# Initialize the game: generate new board, mine map and the first mover
 		self.initialize_state()
 		print(self.board(self.show_frame))
-		# game_mode = input('Do you want to self-design mine number? Enter y/n: ')
-		# if game_mode == 'y':
-		# 	mines_num = int(input('Enter the number of mines you want in this game: '))
-		# 	self.set_mines_num(mines_num)
 		self.generate_mines()
 		
 		
@@ -241,7 +225,7 @@ class Minesweeper:
 			return self.initial_user, self.board(self.show_frame), end_msg
 		elif oper == 'o':
 			if self.bcground[pos] == self.state[S_MINES]:
-				end_msg = 'BOOM!!!!\n'+ player_name + ' steps on the mine!!!'
+				end_msg = 'BOOM!!!!\n'+ player_name + ' steps on the mine!!!\nYou are back to the game pool now.\n'
 				self.win = True
 				return self.initial_user, self.board(self.bcground), end_msg
 			else:
@@ -255,7 +239,7 @@ class Minesweeper:
 					if ele == self.state[S_BLANK]:
 						self.count_show_frame_not_mine += 1	
 				if self.count_not_mine == self.count_show_frame_not_mine:
-					end_msg = 'Congratulations! Both of you won :D'
+					end_msg = 'Congratulations! Both of you won :D\nYou are back to the game pool now.\n '
 					self.win = True	
 				return self.initial_user, self.board(self.show_frame), end_msg
 	
@@ -300,13 +284,6 @@ class Minesweeper:
 			self.show_frame[pos] = self.bcground[pos]
 			#print(self.show_frame)
 							
-
-#	def quit_playing(self, player1, player2):
-#		
-#		
-#	def quit_game(self,player1, player2):
-#		self.quit_playing(player1, player2)	
-			
 			
 #test = Minesweeper('a', 'b')
 #test.set_up_play()

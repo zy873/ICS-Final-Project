@@ -15,6 +15,7 @@ from chat_utils import *
 import chat_group as grp
 
 from Minesweeper import *
+import gui_board as gb
 
 class Server:
 	def __init__(self):
@@ -24,8 +25,8 @@ class Server:
 		self.all_sockets = []
 		self.group = grp.Group()
 		self.group_key = 0
-		
-		#start server
+
+         #start server
 		self.server=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.server.bind(SERVER)
 		self.server.listen(5)
@@ -46,6 +47,13 @@ class Server:
 		self.board = '' # game board
 		self.rules = ''
 		self.end_msg = ''
+		
+		# game leader board        
+		self.start_time = 0
+		self.end_time = 0
+		self.top_grp = []
+		self.top_time = []
+		self.leaderboard = {100000:['testplayer1','testplayer2'],100020:['testplayer3','testplayer4'],100010:['testplayer5','testplayer6']} #key: time period , value: grp members' names as a list
 		
 	def new_client(self, sock):
 		#add to all sockets and to new clients
@@ -199,13 +207,17 @@ class Server:
 					print(from_name + " joins the game pool.")
 					print(self.minesweeper_group.list_all())
 #==============================================================================
-#                quit the Minesweeper game pool \\\\\\\\ last change
+#                quit the Minesweeper game pool
 #==============================================================================						
 			elif msg['action'] == 'quit game':
 				from_name = self.logged_sock2name[from_sock]
-				player = self.minesweeper_group.list_me(from_name)[1]
-				to_sock = self.logged_name2sock[player]
-				mysend(to_sock, json.dumps({"server_msg": "quit game"}))
+				try:
+					# if the player is currently in a game and want to forcefully quit the game, let the other side know
+					player = self.minesweeper_group.list_me(from_name)[1]
+					to_sock = self.logged_name2sock[player]
+					mysend(to_sock, json.dumps({"server_msg": "quit game"}))
+				except:
+					pass
 				self.minesweeper_group.leave(from_name)
 				print(from_name + ' leaves the game pool.')
 
@@ -213,71 +225,81 @@ class Server:
 #                quit the current game
 #==============================================================================	
 			elif msg['action'] == 'quit playing':
-#				from_name = self.logged_sock2name[from_sock]
-#				print(self.minesweeper_group.game_grps)
-#				player = self.minesweeper_group.list_me(from_name)[1]
-#				print(self.logged_name2sock[player])
-#				to_sock = self.logged_name2sock[player]
-#				print(to_sock)
-#				mysend(to_sock, json.dumps({"server_msg": "quit playing"}))
-#				print(player)
-#				print(from_name + 'leaves the current game.')
-#				self.minesweeper_group.disconnect(from_name)
-				from_name = self.logged_sock2name[from_sock]
-				print(self.minesweeper_group.list_all())
-				player = self.minesweeper_group.list_me(from_name)[1]
-				to_sock = self.logged_name2sock[player]
-				
-				# if end game due to sb wins, return the end msg
-				try:
-					mysend(to_sock, json.dumps({"server_msg": msg['reason'],'starter': self.starter,'board':self.board, 'end_msg':self.end_msg}))
-				# if sb forcefully end the game, return this result
+				try: # if the peer has sent back comments for the game
+					if msg['forced'] == 'yes':
+						output = open('Feedback.txt','a')
+						output.write(str(msg['feedback'])+'\n')
+						output.close()
 				except:
-					mysend(to_sock, json.dumps({"server_msg": "quit playing"}))
-				self.minesweeper_group.disconnect(from_name)
-				print(from_name + ' leaves the current game.')
-				
+					# if the comment is from me
+					from_name = self.logged_sock2name[from_sock]
+					print(self.minesweeper_group.list_all())
+					player = self.minesweeper_group.list_me(from_name)[1]
+					to_sock = self.logged_name2sock[player]
+					
+					# if end game due to one wins, return the end msg
+					try:
+						mysend(to_sock, json.dumps({"server_msg": msg['reason'],'starter': self.starter,'board':self.board, 'end_msg':self.end_msg,'leaderboard':msg['leaderboard'],'gui_lb': self.leaderboard,'peer':player}))
+					# if sb forcefully end the game, return this result
+					except:
+						mysend(to_sock, json.dumps({"server_msg": "quit playing"}))
+					self.minesweeper_group.disconnect(from_name)
+					print(from_name + ' leaves the current game.')
+					# write to the file if player has commments
+					try:
+						output = open('Feedback.txt','a')
+						output.write(str(msg['feedback'])+'\n')
+						output.close()
+					except:
+						pass
 #==============================================================================
 #                connect two players, set up game
 #==============================================================================				
 			elif msg['action'] == "request":
 				from_name = self.logged_sock2name[from_sock]
 				to_name = msg["target"]
-				if self.minesweeper_group.is_member(to_name):
-					in_grp, grp_num = self.minesweeper_group.find_group(to_name)
-					if in_grp == False:
-						mysend(from_sock, json.dumps({'server_msg':'you can connect'}))
-						self.group_key = self.minesweeper_group.connect(from_name, to_name)
-						print(self.minesweeper_group.game_grps)
-						print(from_name + ' ' + to_name + " are connected.")
-					else:
-						mysend(from_sock, json.dumps({'server_msg':'in a game'}))
+				if from_name == to_name:
+					mysend(from_sock, json.dumps({'server_msg':'connect to self'}))
 				else:
-					mysend(from_sock, json.dumps({'server_msg':'not in pool','game_group':self.minesweeper_group.list_all()}))
+					# determine whether peer is in game pool
+					if self.minesweeper_group.is_member(to_name):
+						in_grp, grp_num = self.minesweeper_group.find_group(to_name)
+						# determine whether peer is in a game
+						if in_grp == False:
+							mysend(from_sock, json.dumps({'server_msg':'you can connect'}))
+							self.group_key = self.minesweeper_group.connect(from_name, to_name)
+							print(self.minesweeper_group.game_grps)
+							print(from_name + ' ' + to_name + " are connected.")
+						else:
+							mysend(from_sock, json.dumps({'server_msg':'in a game'}))
+					else:
+						mysend(from_sock, json.dumps({'server_msg':'not in pool','game_group':self.minesweeper_group.list_all()}))
 			
 			elif msg['action'] == 'request successful':
 				from_name = self.logged_sock2name[from_sock]
 				to_name = msg["target"]
 				to_sock = self.logged_name2sock[to_name]
 				
-				# initialize the game: pass in Minesweeper class, find the starter, find the inital board
+				# initialize the game: pass in Minesweeper class, find the starter, find the inital board, start timing
 				self.short = self.minesweeper_group.grp_object[self.group_key]
 				self.starter = self.short.set_up_play()
 				self.board = self.short.board(self.short.show_frame)
 				self.rules = self.short.menu()
 				mysend(from_sock, json.dumps({'starter': self.starter,'board':self.board, 'rules': self.rules}))
 				mysend(to_sock, json.dumps({'action':'request successful','from':from_name,'starter': self.starter,'board':self.board, 'rules': self.rules}))
-
+				import time
+				self.start_time = time.time()
+                  
 #==============================================================================
 #                in the minesweeper game
 #==============================================================================						
-			elif msg['action'] == 'game move': #pre: client has entered the instructions for game move
+			elif msg['action'] == 'game move': #client has entered the instructions for game move
 				from_name = self.logged_sock2name[from_sock]
 				other = self.minesweeper_group.list_me(from_name)[1]
 				to_sock = self.logged_name2sock[other]
 				
 				print(self.short.win)
-				
+				# if the game has not finished
 				if not self.short.win:
 					# determine whether client's message are valid for the game
 					instr = msg["message"]
@@ -285,31 +307,59 @@ class Server:
 					oper = instr[0]
 					pos = instr [1]
 					
-
+					# check whether is the right player to make the move
 					if from_name == self.starter:
+						# check whether the position enterered has not been opend and is a valid pos on the board
 						if (pos[0] in self.short.letters) and pos[1:] <='9' and pos[1:] >= '1' and (pos not in self.short.change_frame):
 							
 							# if valid, make the move
 							self.starter, self.board, self.end_msg = self.short.move(from_name, msg["message"])
+                            
+							leader_msg = ''
 							
-							mysend(from_sock, json.dumps({'server_msg':'successfully moved', 'starter': self.starter,'board':self.board, 'end_msg':self.end_msg}))
-							mysend(to_sock, json.dumps({'server_msg':'successfully moved','starter': self.starter,'board':self.board, 'end_msg':self.end_msg}))	
+							if self.short.win:
+                                # append into leaderboard dict
+								import time
+								self.end_time = time.time()
+								period = float(format(self.end_time - self.start_time, '.3f'))
+								grp_member = [from_name, other]
+								
+								# if win, update leaderboard
+								if self.end_msg == 'Congratulations! Both of you won :D\nYou are back to the game pool now.\n ':
+									self.leaderboard[period] = grp_member
+#									print(self.leaderboard)
+									self.top_grp = []
+									self.top_time = []
+									
+									for time in sorted(self.leaderboard.keys()):
+										self.top_grp.append(self.leaderboard[time])
+										self.top_time.append(time)
+									
+									self.top_grp = self.top_grp[:3]
+									self.top_time = self.top_time[:3]
+									
+									for i in range(3):
+										self.leaderboard[self.top_time[i]] = self.top_grp[i]
+									
+#								print(self.leaderboard)
+
+								for i in range(3):
+									try:
+										leader_msg += 'No. ' + str(i+1) + '   ' + str(self.top_grp[i]) + '   ' + str(self.top_time[i]) +'\n'
+									except:
+										leader_msg += '-----------------------------------\n'
+                                
+							
+							mysend(from_sock, json.dumps({'server_msg':'successfully moved', 'starter': self.starter,'board':self.board, 'end_msg':self.end_msg,'leaderboard':leader_msg,'gui_lb': self.leaderboard}))
+							mysend(to_sock, json.dumps({'server_msg':'successfully moved','starter': self.starter,'board':self.board, 'end_msg':self.end_msg,'leaderboard':leader_msg,'gui_lb': self.leaderboard}))	
 						else:
 							mysend(from_sock, json.dumps({'server_msg': "Invalid move"}))
 					else:
 						mysend(from_sock, json.dumps({'server_msg': "Wrong player"}))
-				
-#				# if the game ends, let player go in the pool
-#				else:
-#					self.minesweeper_group.disconnect(from_name)
-#					self.minesweeper_group.disconnect(other)
-#					to_sock = self.logged_name2sock[other]
-#					mysend(to_sock, json.dumps({"server_msg": "game over"}))
-#					mysend(from_sock, json.dumps({"server_msg": "game over"}))  
 					
 				else:
 					print('ERROR')
-
+                     
 #==============================================================================
 #                 the "from" guy really, really has had enough
 #==============================================================================

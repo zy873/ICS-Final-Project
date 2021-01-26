@@ -6,6 +6,7 @@ Created on Sun Apr  5 00:00:32 2015
 from chat_utils import *
 import json
 from Minesweeper import *
+import gui_board as gb
 
 class ClientSM:
     def __init__(self, s):
@@ -114,7 +115,7 @@ class ClientSM:
                         self.out_msg += 'You are already in the game pool.\n'
                     else:
                         self.state = S_GAME  
-                        self.out_msg += "You have just joined the game pool. Play now!\n"
+                        self.out_msg += "\nYou have just joined the game pool. Play now!\n"
                         self.out_msg += "Enter in the format of '@@ __partner__' to play the game with your partner.\n"
                         self.out_msg += '-----------------------------------\n'
 
@@ -169,7 +170,6 @@ class ClientSM:
                     self.out_msg += peer_msg['starter'] + ' should make the move.\n' + peer_msg['board'] + '\n' + peer_msg['rules'] + '\n'
                     self.state = S_PLAYING
                     
-            
             if len(my_msg) > 0: # input g someone to connect with sb in game
                 if my_msg == 'quit game':
                     msg = json.dumps({"action":"quit game"})
@@ -203,6 +203,8 @@ class ClientSM:
                             #now can only quit game, enter chat system, connect with peer, and then ask him to join
                             self.out_msg += server_msg['game_group']
                             #self.out_msg += json.loads(myrecv(self.s))['game_group']
+                        elif server_msg['server_msg'] == 'connect to self':
+                            self.out_msg += "Don't game with yourself! (sick)"
                     else:
                         self.out_msg += "Please make sure that you have entered the right instruction.\nEnter in the format of '@@ __partner__' to play the game with your partner.\n"
 
@@ -235,45 +237,77 @@ class ClientSM:
                             if server_msg['end_msg'] == '':
                                 self.out_msg += '\n\n-----------------------------------\n'
                                 self.out_msg += server_msg['starter'] + ' should make the next move.\n' + server_msg['board'] + '\n' 
+                           
                             # if the game has finished
                             else:
-                                self.out_msg += server_msg['board'] + '\n' + server_msg['end_msg'] + '\n'
-                                msg = json.dumps({"action":"quit playing",'reason':'game over'})
+                                print(server_msg['board'] + '\n' + server_msg['end_msg'] + '\n')
+                                
+                                # plus leaderboard
+                                leaderboard = server_msg['leaderboard']
+                                # because socket makes the keys str, need them back to float
+                                leader_info = {}
+                                for key in server_msg['gui_lb'].keys():
+                                    leader_info[float(key)] = server_msg['gui_lb'][key]
+                                
+                                gb.main(self.me,leader_info)
+                                try:
+                                    comment, name = gb.get_data(1)
+                                except:
+                                    comment, name = '', ''
+
+                                msg = json.dumps({"action":"quit playing",'reason':'game over', 'leaderboard':'LEADERBOARD\n' + leaderboard,'feedback': [comment + name]})
                                 mysend(self.s, msg)
                                 self.state = S_GAME
                                 
                         elif server_msg['server_msg'] == "Invalid move":
                             self.out_msg += 'Please enter a valid move.\n'
-                            
                         
                         elif server_msg['server_msg'] == "Wrong player":
                             self.out_msg += 'This is not your turn yet! Please wait for your partner to move.\n'
+                        
                         elif server_msg['server_msg'] == 'game over':
                             self.out_msg += server_msg['board'] + '\n' + server_msg['end_msg'] + '\n'
                             msg = json.dumps({"action":"quit playing"})
                             self.state = S_GAME
                             mysend(self.s, msg)
-                    # chatting
                     else:
                         pass
                         
             if len(peer_msg) > 0:
+                
                 peer_msg = json.loads(peer_msg) 
                 if peer_msg['server_msg'] == "quit playing" or peer_msg['server_msg'] == "quit game":
                     self.out_msg += "You are forced to quit this game bc your partner has quited the game/game pool.\n"                    
                     self.state = S_GAME
                 elif peer_msg['server_msg'] == 'game over':
-                    self.out_msg += peer_msg['board'] + '\n' + peer_msg['end_msg'] + '\n'
+                    print(peer_msg['board'] + '\n' + peer_msg['end_msg'] + '\n')
                     self.state = S_GAME
+
+                    leaderboard = peer_msg['leaderboard']
+                    leader_info = peer_msg['gui_lb']
+                    gb.main(peer_msg['peer'],leader_info)
+                    
+                    try:
+                        comment, name = gb.get_data(1)
+                    except:
+                        comment, name = '', ''
+                    
+                    # if receives feedback, send to the server
+                    if comment != '' and name != '':
+                        msg = json.dumps({"action":"quit playing",'reason':'game over', 'leaderboard':'LEADERBOARD\n' + leaderboard,'feedback': [comment + name],'forced': 'yes'})
+                        mysend(self.s, msg)
+                    else:
+                        pass
+
                 elif peer_msg['server_msg'] == 'successfully moved':
-                    self.out_msg += '\n\n-----------------------------------\n'
-                    self.out_msg += peer_msg['starter'] + ' should make the next move.\n' + peer_msg['board'] + '\n'
-                    self.out_msg += 'Your partner has made the move. Now it is your turn.'
+                    if '■' in peer_msg['board']:
+                        pass
+                    else:
+                        self.out_msg += '\n\n-----------------------------------\n'
+                        self.out_msg += peer_msg['starter'] + ' should make the next move.\n' + peer_msg['board'] + '\n'
+                        self.out_msg += 'Your partner has made the move. Now it is your turn.'
                 else:
                     self.out_msg += 'ERROR'
- 
-                
-                    
               
 #==============================================================================
 # invalid state
